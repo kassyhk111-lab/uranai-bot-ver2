@@ -43,9 +43,6 @@ def get_ai_reply(user_data, user_message):
 以下の情報をもとに、
 優しく、寄り添うように鑑定してください。
 
-【名前】
-{user_data.get("name", "")}
-
 【生年月日】
 {user_data.get("birth", "")}
 
@@ -181,7 +178,7 @@ def handle_follow(event):
     user_id = event.source.user_id
 
     user_states[user_id] = {
-        "step": "waiting_name"
+        "step": "waiting_birth"
     }
 
     welcome_message = (
@@ -194,7 +191,8 @@ def handle_follow(event):
         "🌟 悩みの原因\n"
         "🌟 より良い未来へ進むためのアドバイス\n\n"
         "を、一人ひとりに合わせてお伝えします。\n\n"
-        "鑑定を始めますので、まずはお名前（ニックネームOK）を教えてください😊"
+        "鑑定を始めますので、まずは生年月日を教えてください😊\n\n"
+        "（例：1995/03/21）"
     )
 
     with ApiClient(configuration) as api_client:
@@ -222,12 +220,13 @@ def handle_message(event):
 
     if user_message == "無料鑑定" or user_message == "無料鑑定希望":
         user_states[user_id] = {
-            "step": "waiting_name"
+            "step": "waiting_birth"
         }
 
         reply_text = (
             "無料鑑定を開始します🔮\n\n"
-            "まずは、お名前（ニックネームOK）を教えてください✨"
+            "まずは、生年月日を教えてください😊\n\n"
+            "（例：1995/03/21）"
         )
 
         with ApiClient(configuration) as api_client:
@@ -246,18 +245,7 @@ def handle_message(event):
 
     current_step = user_states[user_id]["step"]
 
-    if current_step == "waiting_name":
-        user_states[user_id]["name"] = user_message
-        user_states[user_id]["step"] = "waiting_birth"
-
-        reply_text = (
-            f"{user_message}さん、ありがとうございます✨\n\n"
-            "より正確に鑑定するため、\n"
-            "次に生年月日を教えてください😊\n\n"
-            "（例：1995/03/21）"
-        )
-
-    elif current_step == "waiting_birth":
+    if current_step == "waiting_birth":
         user_states[user_id]["birth"] = user_message
         user_states[user_id]["step"] = "waiting_problem"
 
