@@ -1,6 +1,5 @@
 from flask import Flask, request, abort
 import os
-from pathlib import Path
 import requests
 
 from linebot.v3 import WebhookHandler
@@ -29,50 +28,93 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 user_states = {}
 
-COCONALA_URL = "https://coconala.com/services/1761884?ref=profile_top_service"
 
+def get_ai_reply(user_data, user_message):
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
 
-def load_base_prompt():
-    prompt_path = Path(__file__).parent / "prompts" / "base_prompt.txt"
+    problem = user_data.get("problem", "")
+
+    prompt = f"""
+あなたは西洋占星術の占い師HIDEです。
+
+以下の情報をもとに、
+優しく、寄り添うように鑑定してください。
+
+【名前】
+{user_data.get("name", "")}
+
+【生年月日】
+{user_data.get("birth", "")}
+
+【相談内容】
+{problem}
+
+【理想の未来】
+{user_message}
+"""
+
+    json_data = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {
+                "role": "system",
+                "content": prompt
+            }
+        ]
+    }
 
     try:
-        return prompt_path.read_text(encoding="utf-8")
-    except Exception as e:
-        print(e)
-        return "あなたは西洋占星術の占い師HIDEです。優しく、寄り添うように鑑定してください。"
+        response = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers=headers,
+            json=json_data
+        )
 
+        result = response.json()
+        ai_reply = result["choices"][0]["message"]["content"]
 
-def get_sales_message(problem):
-    if "恋" in problem or "復縁" in problem or "片思い" in problem or "結婚" in problem:
-        return f"""
+        if "恋" in problem:
+            ai_reply += """
+
 ━━━━━━━━━━━
 
+今回の鑑定では、
+恋愛運に大きな転換期が出ていました🔮
+
+ただ、
 今回の無料鑑定では、
-恋愛の大きな流れと、今意識した方が良いことを中心にお伝えしました🔮
+まだ“表面部分”しか見れていません。
 
 本格鑑定では、
 
 ・相手の本音
-・今後3か月〜1年の流れ
+・今後3ヶ月の流れ
 ・恋愛成就のタイミング
-・今やるべき行動
-・避けた方が良い時期
+・あなたが今やるべきこと
 
-まで、さらに詳しく読み解いていきます✨
+まで深く読み解いていきます✨
 
-もっと深く知りたい方はこちらをご覧ください👇
+続きが気になる方はこちら👇
 
-{COCONALA_URL}
+https://coconala.com/services/1761884?ref=profile_top_service
 
 ━━━━━━━━━━━
 """
 
-    if "金" in problem or "お金" in problem or "仕事" in problem or "転職" in problem or "収入" in problem:
-        return f"""
+        elif "金" in problem or "仕事" in problem:
+            ai_reply += """
+
 ━━━━━━━━━━━
 
+今回の鑑定では、
+金運に大きな変化の流れが出ていました💰
+
+ただ、
 今回の無料鑑定では、
-金運・仕事運の大きな流れと、今意識した方が良いことを中心にお伝えしました💰
+まだ“入口部分”しか見れていません。
 
 本格鑑定では、
 
@@ -80,122 +122,45 @@ def get_sales_message(problem):
 ・収入アップのタイミング
 ・仕事運の転換期
 ・あなたに合う成功パターン
-・避けた方が良い時期
 
-まで、さらに詳しく読み解いていきます✨
+まで詳しく読み解いていきます✨
 
-もっと深く知りたい方はこちらをご覧ください👇
+続きが気になる方はこちら👇
 
-{COCONALA_URL}
+https://coconala.com/services/1761884?ref=profile_top_service
 
 ━━━━━━━━━━━
 """
 
-    if "人間関係" in problem or "家族" in problem or "友人" in problem or "職場" in problem:
-        return f"""
+        else:
+            ai_reply += """
+
 ━━━━━━━━━━━
 
-今回の無料鑑定では、
-人間関係の大きな流れと、今意識した方が良いことを中心にお伝えしました🔮
+今回の鑑定では、
+今後の人生に大きな転換期が出ていました🔮
 
 本格鑑定では、
 
-・相手との関係性の流れ
-・距離感の取り方
-・今後3か月〜1年の変化
-・あなたが無理をしないための行動
-・避けた方が良い対応
+・今後3ヶ月の流れ
+・運気の転換タイミング
+・あなたが進むべき方向
+・開運アクション
 
-まで、さらに詳しく読み解いていきます✨
+まで詳しく読み解いていきます✨
 
-もっと深く知りたい方はこちらをご覧ください👇
+続きが気になる方はこちら👇
 
-{COCONALA_URL}
-
-━━━━━━━━━━━
-"""
-
-    return f"""
-━━━━━━━━━━━
-
-今回の無料鑑定では、
-今の大きな流れと、最初に意識した方が良いことを中心にお伝えしました🔮
-
-本格鑑定では、
-
-・今後3か月〜1年の流れ
-・運気が大きく動くタイミング
-・相談内容に合わせた具体的な行動
-・避けた方が良い時期
-・あなた自身も気付いていない強み
-
-まで、さらに詳しく読み解いていきます✨
-
-もっと深く知りたい方はこちらをご覧ください👇
-
-{COCONALA_URL}
+https://coconala.com/services/1761884?ref=profile_top_service
 
 ━━━━━━━━━━━
 """
-
-
-def get_ai_reply(user_data, user_message):
-    base_prompt = load_base_prompt()
-    problem = user_data.get("problem", "")
-
-    user_info = f"""
-【相談者情報】
-
-名前：
-{user_data.get("name", "")}
-
-生年月日：
-{user_data.get("birth", "")}
-
-相談内容：
-{problem}
-
-今回の鑑定を通して、どうなりたいか：
-{user_message}
-"""
-
-    headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    json_data = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {
-                "role": "system",
-                "content": base_prompt
-            },
-            {
-                "role": "user",
-                "content": user_info
-            }
-        ],
-        "temperature": 0.8
-    }
-
-    try:
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers=headers,
-            json=json_data,
-            timeout=30
-        )
-
-        result = response.json()
-        ai_reply = result["choices"][0]["message"]["content"]
-        ai_reply += get_sales_message(problem)
 
         return ai_reply
 
     except Exception as e:
         print(e)
-        return "現在AI返信でエラーが発生しています。少し時間を置いて、もう一度お試しください。"
+        return "現在AI返信でエラーが発生しています。"
 
 
 @app.route("/callback", methods=["POST"])
@@ -214,7 +179,10 @@ def callback():
 @handler.add(FollowEvent)
 def handle_follow(event):
     user_id = event.source.user_id
-    user_states[user_id] = {"step": "waiting_name"}
+
+    user_states[user_id] = {
+        "step": "waiting_name"
+    }
 
     welcome_message = (
         "ご登録ありがとうございます🔮\n\n"
@@ -231,10 +199,13 @@ def handle_follow(event):
 
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
+
         line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text=welcome_message)]
+                messages=[
+                    TextMessage(text=welcome_message)
+                ]
             )
         )
 
@@ -242,25 +213,35 @@ def handle_follow(event):
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
     user_id = event.source.user_id
-    user_message = event.message.text.strip()
+    user_message = event.message.text
 
     if user_id not in user_states:
-        user_states[user_id] = {"step": "completed"}
+        user_states[user_id] = {
+            "step": "completed"
+        }
 
     if user_message == "無料鑑定" or user_message == "無料鑑定希望":
-        user_states[user_id] = {"step": "waiting_name"}
+        user_states[user_id] = {
+            "step": "waiting_name"
+        }
+
         reply_text = (
             "無料鑑定を開始します🔮\n\n"
             "まずは、お名前（ニックネームOK）を教えてください✨"
         )
+
         with ApiClient(configuration) as api_client:
             line_bot_api = MessagingApi(api_client)
+
             line_bot_api.reply_message(
                 ReplyMessageRequest(
                     reply_token=event.reply_token,
-                    messages=[TextMessage(text=reply_text)]
+                    messages=[
+                        TextMessage(text=reply_text)
+                    ]
                 )
             )
+
         return
 
     current_step = user_states[user_id]["step"]
@@ -268,6 +249,7 @@ def handle_message(event):
     if current_step == "waiting_name":
         user_states[user_id]["name"] = user_message
         user_states[user_id]["step"] = "waiting_birth"
+
         reply_text = (
             f"{user_message}さん、ありがとうございます✨\n\n"
             "より正確に鑑定するため、\n"
@@ -278,6 +260,7 @@ def handle_message(event):
     elif current_step == "waiting_birth":
         user_states[user_id]["birth"] = user_message
         user_states[user_id]["step"] = "waiting_problem"
+
         reply_text = (
             "ありがとうございます😊\n\n"
             "次に、今一番悩んでいることを教えてください✨\n\n"
@@ -288,6 +271,7 @@ def handle_message(event):
     elif current_step == "waiting_problem":
         user_states[user_id]["problem"] = user_message
         user_states[user_id]["step"] = "waiting_future"
+
         reply_text = (
             "ありがとうございます✨\n\n"
             "最後に、\n\n"
@@ -301,7 +285,11 @@ def handle_message(event):
         )
 
     elif current_step == "waiting_future":
-        reply_text = get_ai_reply(user_states[user_id], user_message)
+        reply_text = get_ai_reply(
+            user_states[user_id],
+            user_message
+        )
+
         user_states[user_id]["step"] = "completed"
 
     else:
@@ -312,14 +300,21 @@ def handle_message(event):
 
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
+
         line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text=reply_text)]
+                messages=[
+                    TextMessage(text=reply_text)
+                ]
             )
         )
 
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+
+    app.run(
+        host="0.0.0.0",
+        port=port
+    )
