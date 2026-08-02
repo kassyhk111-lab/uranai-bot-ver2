@@ -348,6 +348,8 @@ def handle_message(event):
     user_id = event.source.user_id
     user_message = event.message.text
 
+    print(f"Received message: {repr(user_message)}")
+
     if user_id not in user_states:
         user_states[user_id] = {
             "step": "completed"
