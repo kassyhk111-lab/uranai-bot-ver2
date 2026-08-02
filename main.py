@@ -18,16 +18,99 @@ from linebot.v3.webhooks import (
     FollowEvent
 )
 
+from supabase import create_client
+
+
 app = Flask(__name__)
 
 LINE_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
 configuration = Configuration(access_token=LINE_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
+# Supabaseの接続に失敗しても、LINE Bot本体は停止させない
+supabase_client = None
+
+if SUPABASE_URL and SUPABASE_KEY:
+    try:
+        supabase_client = create_client(
+            SUPABASE_URL,
+            SUPABASE_KEY
+        )
+        print("Supabase client initialized.")
+    except Exception as e:
+        print(f"Supabase initialization error: {e}")
+else:
+    print("Supabase environment variables are not configured.")
+
+# 現在の会話状態
 user_states = {}
+
+
+def save_user_progress(user_id, status, display_name=None):
+    """
+    ユーザーの現在の進捗をSupabaseへ保存する。
+
+    Supabase側でエラーが発生しても例外を外へ出さず、
+    LINE Botの鑑定・返信処理を継続する。
+    """
+
+    if supabase_client is None:
+        print(
+            f"Supabase unavailable: "
+            f"user_id={user_id}, status={status}"
+        )
+        return
+
+    try:
+        user_data = {
+            "line_user_id": user_id,
+            "status": status
+        }
+
+        if display_name:
+            user_data["display_name"] = display_name
+
+        existing_user = (
+            supabase_client
+            .table("users")
+            .select("id")
+            .eq("line_user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+
+        if existing_user.data:
+            (
+                supabase_client
+                .table("users")
+                .update(user_data)
+                .eq("line_user_id", user_id)
+                .execute()
+            )
+        else:
+            (
+                supabase_client
+                .table("users")
+                .insert(user_data)
+                .execute()
+            )
+
+        print(
+            f"Supabase progress saved: "
+            f"user_id={user_id}, status={status}"
+        )
+
+    except Exception as e:
+        print(
+            f"Supabase progress save error: "
+            f"user_id={user_id}, status={status}, error={e}"
+        )
 
 
 def get_ai_reply(user_data, user_message):
@@ -227,6 +310,12 @@ def handle_follow(event):
         "step": "waiting_birth"
     }
 
+    # 友だち追加後、生年月日入力待ちとして記録
+    save_user_progress(
+        user_id,
+        "waiting_birthdate"
+    )
+
     welcome_message = (
         "ご登録ありがとうございます🔮\n\n"
         "占い師HIDEです😊\n\n"
@@ -269,6 +358,12 @@ def handle_message(event):
             "step": "waiting_birth"
         }
 
+        # 再鑑定開始。生年月日入力待ちとして更新
+        save_user_progress(
+            user_id,
+            "waiting_birthdate"
+        )
+
         reply_text = (
             "無料鑑定を開始します🔮\n\n"
             "まずは、生年月日を教えてください😊\n\n"
@@ -295,6 +390,12 @@ def handle_message(event):
         user_states[user_id]["birth"] = user_message
         user_states[user_id]["step"] = "waiting_problem"
 
+        # 生年月日入力完了。悩み入力待ちとして更新
+        save_user_progress(
+            user_id,
+            "waiting_problem"
+        )
+
         reply_text = (
             "ありがとうございます😊\n\n"
             "次に、今一番悩んでいることを教えてください✨\n\n"
@@ -305,6 +406,12 @@ def handle_message(event):
     elif current_step == "waiting_problem":
         user_states[user_id]["problem"] = user_message
         user_states[user_id]["step"] = "waiting_future"
+
+        # 悩み入力完了。理想の未来入力待ちとして更新
+        save_user_progress(
+            user_id,
+            "waiting_future"
+        )
 
         reply_text = (
             "ありがとうございます✨\n\n"
@@ -325,6 +432,18 @@ def handle_message(event):
         )
 
         user_states[user_id]["step"] = "completed"
+
+        if reply_text == "現在AI返信でエラーが発生しています。":
+            save_user_progress(
+                user_id,
+                "ai_error"
+            )
+        else:
+            # AI鑑定とココナラ案内の送信が完了
+            save_user_progress(
+                user_id,
+                "coconala_sent"
+            )
 
     else:
         reply_text = (
