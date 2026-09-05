@@ -1,6 +1,7 @@
 from flask import Flask, request, abort
 import os
 import requests
+import secrets
 from datetime import datetime, timezone, timedelta
 
 from linebot.v3 import WebhookHandler
@@ -29,6 +30,10 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+COCONALA_DIRECT_URL = (
+    "https://coconala.com/services/1761884?ref=profile_top_service"
+)
 
 configuration = Configuration(access_token=LINE_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
@@ -113,7 +118,83 @@ def save_user_progress(user_id, status, display_name=None):
         )
 
 
-def get_ai_reply(user_data, user_message):
+def create_coconala_tracking_url(user_id):
+    """
+    ココナラクリック計測用のランダムトークンを作成し、
+    Supabaseのusersテーブルへ保存する。
+
+    計測用URLを作れない場合は、
+    購入導線を止めないためココナラ直リンクを返す。
+    """
+
+    if supabase_client is None or not SUPABASE_URL:
+        print(
+            f"Coconala tracking unavailable: "
+            f"user_id={user_id}"
+        )
+        return COCONALA_DIRECT_URL
+
+    try:
+        token = secrets.token_urlsafe(24)
+
+        existing_user = (
+            supabase_client
+            .table("users")
+            .select("id")
+            .eq("line_user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+
+        tracking_data = {
+            "coconala_click_token": token,
+            "coconala_clicked_at": None
+        }
+
+        if existing_user.data:
+            (
+                supabase_client
+                .table("users")
+                .update(tracking_data)
+                .eq("line_user_id", user_id)
+                .execute()
+            )
+        else:
+            (
+                supabase_client
+                .table("users")
+                .insert({
+                    "line_user_id": user_id,
+                    "status": "coconala_sent",
+                    "coconala_click_token": token,
+                    "coconala_clicked_at": None
+                })
+                .execute()
+            )
+
+        tracking_url = (
+            f"{SUPABASE_URL.rstrip('/')}"
+            f"/functions/v1/coconala-click?t={token}"
+        )
+
+        print(
+            f"Coconala tracking URL created: "
+            f"user_id={user_id}"
+        )
+
+        return tracking_url
+
+    except Exception as e:
+        print(
+            f"Coconala tracking URL error: "
+            f"user_id={user_id}, error={e}"
+        )
+
+        # 計測に失敗しても販売ページへの導線は止めない
+        return COCONALA_DIRECT_URL
+
+
+def get_ai_reply(user_id, user_data, user_message):
     headers = {
         "Authorization": f"Bearer {OPENAI_API_KEY}",
         "Content-Type": "application/json"
@@ -170,8 +251,12 @@ def get_ai_reply(user_data, user_message):
         result = response.json()
         ai_reply = result["choices"][0]["message"]["content"]
 
+        # AI鑑定に成功した後で、
+        # このユーザー専用のココナラ計測URLを作成
+        coconala_url = create_coconala_tracking_url(user_id)
+
         if "恋" in problem:
-            ai_reply += """
+            ai_reply += f"""
 
 ━━━━━━━━━━━
 
@@ -209,13 +294,13 @@ def get_ai_reply(user_data, user_message):
 そう感じた方は、
 本格鑑定をご覧ください👇
 
-https://coconala.com/services/1761884?ref=profile_top_service
+{coconala_url}
 
 ━━━━━━━━━━━
 """
 
         elif "仕事" in problem or "転職" in problem:
-            ai_reply += """
+            ai_reply += f"""
 
 ━━━━━━━━━━━
 
@@ -252,13 +337,13 @@ https://coconala.com/services/1761884?ref=profile_top_service
 そう感じた方は、
 本格鑑定をご覧ください👇
 
-https://coconala.com/services/1761884?ref=profile_top_service
+{coconala_url}
 
 ━━━━━━━━━━━
 """
 
         elif "金" in problem or "収入" in problem or "お金" in problem:
-            ai_reply += """
+            ai_reply += f"""
 
 ━━━━━━━━━━━
 
@@ -296,13 +381,13 @@ https://coconala.com/services/1761884?ref=profile_top_service
 そう感じた方は、
 本格鑑定をご覧ください👇
 
-https://coconala.com/services/1761884?ref=profile_top_service
+{coconala_url}
 
 ━━━━━━━━━━━
 """
 
         else:
-            ai_reply += """
+            ai_reply += f"""
 
 ━━━━━━━━━━━
 
@@ -337,7 +422,7 @@ https://coconala.com/services/1761884?ref=profile_top_service
 そう感じた方は、
 本格鑑定をご覧ください👇
 
-https://coconala.com/services/1761884?ref=profile_top_service
+{coconala_url}
 
 ━━━━━━━━━━━
 """
@@ -492,6 +577,7 @@ def handle_message(event):
 
     elif current_step == "waiting_future":
         reply_text = get_ai_reply(
+            user_id,
             user_states[user_id],
             user_message
         )
