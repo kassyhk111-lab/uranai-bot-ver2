@@ -326,6 +326,9 @@ def callback():
 def handle_follow(event):
     user_id = event.source.user_id
 
+    # FollowEventがRenderまで届いているか確認するためのログ
+    print(f"FollowEvent received: user_id={user_id}")
+
     user_states[user_id] = {
         "step": "waiting_birth"
     }
