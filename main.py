@@ -477,6 +477,37 @@ def handle_message(event):
 
         return
 
+        if user_message == "質問・ご相談":
+        user_states[user_id] = {
+            "step": "manual"
+        }
+
+        save_user_progress(
+            user_id,
+            "manual"
+        )
+
+        reply_text = (
+            "ご質問・ご相談ありがとうございます😊\n\n"
+            "どのようなことでお悩みでしょうか？\n"
+            "このトークにそのまま入力してください\n\n"
+            "内容を確認後、順番にお返事します"
+        )
+
+        with ApiClient(configuration) as api_client:
+            line_bot_api = MessagingApi(api_client)
+
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[
+                        TextMessage(text=reply_text)
+                    ]
+                )
+            )
+
+        return
+
     current_step = user_states[user_id]["step"]
 
     if current_step == "waiting_birth":
