@@ -35,7 +35,6 @@ COCONALA_DIRECT_URL = (
     "https://coconala.com/services/1761884?ref=profile_top_service"
 )
 
-
 configuration = Configuration(access_token=LINE_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
@@ -478,7 +477,7 @@ def handle_message(event):
 
         return
 
-    if user_message == "質問・ご相談":
+    if user_message in ("質問・ご相談", "質問･ご相談"):
         user_states[user_id] = {
             "step": "manual"
         }
