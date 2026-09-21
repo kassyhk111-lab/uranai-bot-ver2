@@ -1,3 +1,4 @@
+
 from flask import Flask, request, abort
 import os
 import requests
@@ -115,6 +116,45 @@ def save_user_progress(user_id, status, display_name=None):
         print(
             f"Supabase progress save error: "
             f"user_id={user_id}, status={status}, error={e}"
+        )
+
+
+def save_user_field(user_id, field_name, value):
+    """
+    生年月日・悩み・理想の未来などの入力内容を
+    Supabaseのusersテーブルへ保存する。
+
+    Supabase側でエラーが発生しても、
+    LINE Bot本体の返信処理は継続する。
+    """
+
+    if supabase_client is None:
+        print(
+            f"Supabase unavailable: "
+            f"user_id={user_id}, field={field_name}"
+        )
+        return
+
+    try:
+        (
+            supabase_client
+            .table("users")
+            .update({
+                field_name: value
+            })
+            .eq("line_user_id", user_id)
+            .execute()
+        )
+
+        print(
+            f"Supabase field saved: "
+            f"user_id={user_id}, field={field_name}"
+        )
+
+    except Exception as e:
+        print(
+            f"Supabase field save error: "
+            f"user_id={user_id}, field={field_name}, error={e}"
         )
 
 
@@ -546,6 +586,13 @@ def handle_message(event):
             "waiting_problem"
         )
 
+        # 入力された生年月日をSupabaseへ保存
+        save_user_field(
+            user_id,
+            "birthdate",
+            user_message
+        )
+
         reply_text = (
             "ありがとうございます😊\n\n"
             "次に、今一番悩んでいることを教えてください✨\n\n"
@@ -563,6 +610,13 @@ def handle_message(event):
             "waiting_future"
         )
 
+        # 入力された悩みをSupabaseへ保存
+        save_user_field(
+            user_id,
+            "problem",
+            user_message
+        )
+
         reply_text = (
             "ありがとうございます✨\n\n"
             "最後に、\n\n"
@@ -576,6 +630,13 @@ def handle_message(event):
         )
 
     elif current_step == "waiting_future":
+        # 入力された理想の未来をSupabaseへ保存
+        save_user_field(
+            user_id,
+            "future",
+            user_message
+        )
+
         reply_text = get_ai_reply(
             user_id,
             user_states[user_id],
