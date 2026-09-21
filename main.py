@@ -180,7 +180,7 @@ def load_user_state(user_id):
         result = (
             supabase_client
             .table("users")
-            .select("status,birthdate,problem,future")
+            .select("status,birthdate,problem,future,survey_response")
             .eq("line_user_id", user_id)
             .limit(1)
             .execute()
@@ -200,6 +200,8 @@ def load_user_state(user_id):
             "waiting_birthdate": "waiting_birth",
             "waiting_problem": "waiting_problem",
             "waiting_future": "waiting_future",
+            "waiting_survey": "waiting_survey",
+            "manual": "manual",
             "ai_error": "completed",
             "coconala_sent": "completed",
         }
@@ -366,182 +368,6 @@ def get_ai_reply(user_id, user_data, user_message):
         result = response.json()
         ai_reply = result["choices"][0]["message"]["content"]
 
-        # AI鑑定に成功した後で、
-        # このユーザー専用のココナラ計測URLを作成
-        coconala_url = create_coconala_tracking_url(user_id)
-
-        if "恋" in problem:
-            ai_reply += f"""
-
-━━━━━━━━━━━
-
-今回の無料鑑定では、
-恋愛の大きな流れと、
-今のあなたが意識した方がいいことを中心にお伝えしました🔮
-
-でも、ここまで読んで、
-
-「相手は本当はどう思っているんだろう」
-「このまま待っていていいのかな」
-「自分から動くなら、いつがいいんだろう」
-
-そんなことが気になっていませんか？
-
-恋愛って、
-気持ちがあるからこそ、
-動くべきか待つべきか分からなくなるものです。
-
-本格鑑定では、
-
-・お相手との今の関係性
-・これから3ヶ月〜1年の恋愛の流れ
-・関係が動きやすいタイミング
-・今、自分から動いた方がいいのか
-・今後意識したいこと、避けたい行動
-
-まで、
-あなたの今の状況に合わせて
-さらに詳しく読み解いていきます✨
-
-「この先どうすればいいのか、
-もう少し具体的に知ってから動きたい」
-
-そう感じた方は、
-本格鑑定をご覧ください👇
-
-{coconala_url}
-
-━━━━━━━━━━━
-"""
-
-        elif "仕事" in problem or "転職" in problem:
-            ai_reply += f"""
-
-━━━━━━━━━━━
-
-今回の無料鑑定では、
-仕事についての大きな流れと、
-今意識した方がいいことを中心にお伝えしました🔮
-
-でも、
-
-「このまま今の仕事を続けていいのか」
-「転職した方がいいのか」
-「動くとしても、今なのか、まだ待つべきなのか」
-
-そこが一番迷うところではないでしょうか。
-
-仕事は生活にも関わるからこそ、
-勢いだけでは決めにくいものです。
-
-本格鑑定では、
-
-・今後3ヶ月〜1年の仕事運
-・今の環境で意識した方がいいこと
-・転職や環境を変えやすいタイミング
-・あなたの強みを活かしやすい働き方
-・今動くべき時期と慎重にしたい時期
-
-まで、
-あなたの状況に合わせて
-さらに詳しく読み解いていきます✨
-
-「後悔しないために、
-この先どう動けばいいのか知っておきたい」
-
-そう感じた方は、
-本格鑑定をご覧ください👇
-
-{coconala_url}
-
-━━━━━━━━━━━
-"""
-
-        elif "金" in problem or "収入" in problem or "お金" in problem:
-            ai_reply += f"""
-
-━━━━━━━━━━━
-
-今回の無料鑑定では、
-金運の大きな流れと、
-今意識した方がいいことを中心にお伝えしました🔮
-
-でも、お金のことって、
-
-「この不安はいつまで続くんだろう」
-「これから少しは楽になっていくのかな」
-「今の自分は何を変えればいいんだろう」
-
-そんなところまで知りたくなりませんか？
-
-お金の不安は、
-ただ運気が良い・悪いだけでは
-なかなか消えません。
-
-本格鑑定では、
-
-・今後3ヶ月〜1年の金運の流れ
-・収入面が動きやすいタイミング
-・仕事とお金の流れの関係
-・今から意識したいこと
-・今できる具体的な行動
-
-まで、
-あなたのご相談に合わせて
-さらに詳しく読み解いていきます✨
-
-「少しでも不安を減らすために、
-これから何をすればいいのか知っておきたい」
-
-そう感じた方は、
-本格鑑定をご覧ください👇
-
-{coconala_url}
-
-━━━━━━━━━━━
-"""
-
-        else:
-            ai_reply += f"""
-
-━━━━━━━━━━━
-
-今回の無料鑑定では、
-今の運勢の大きな流れと、
-今意識した方がいいことを中心にお伝えしました🔮
-
-でも、
-
-「結局、自分はこれからどうすればいいんだろう」
-「このまま進んで大丈夫なのかな」
-「何か変えるなら、どこから変えればいいんだろう」
-
-そんな迷いは、
-まだ少し残っているかもしれません。
-
-本格鑑定では、
-
-・今後3ヶ月〜1年の流れ
-・運気が動きやすいタイミング
-・今抱えている悩みとの向き合い方
-・あなたが進みやすい方向
-・今からできる具体的な行動
-
-まで、
-あなたのご相談内容に合わせて
-さらに詳しく読み解いていきます✨
-
-「この先どう動けばいいのか、
-もう少し具体的に知っておきたい」
-
-そう感じた方は、
-本格鑑定をご覧ください👇
-
-{coconala_url}
-
-━━━━━━━━━━━
-"""
-
         return ai_reply
 
     except Exception as e:
@@ -612,6 +438,8 @@ def handle_message(event):
     user_message = event.message.text
 
     print(f"Received message: {repr(user_message)}")
+
+    extra_reply_text = None
 
     if user_id not in user_states:
         # Render再起動・スピンダウン後は、
@@ -712,25 +540,89 @@ def handle_message(event):
             user_message
         )
 
-        reply_text = get_ai_reply(
+        ai_reply = get_ai_reply(
             user_id,
             user_states[user_id],
             user_message
         )
 
-        user_states[user_id]["step"] = "completed"
-
-        if reply_text == "現在AI返信でエラーが発生しています。":
+        if ai_reply == "現在AI返信でエラーが発生しています。":
+            user_states[user_id]["step"] = "completed"
             save_user_progress(
                 user_id,
                 "ai_error"
             )
+            reply_text = ai_reply
         else:
-            # AI鑑定とココナラ案内の送信が完了
+            # 無料鑑定後は販売ページへ直接誘導せず、
+            # 今後の関係につなぐ案内と3問アンケートを送る
+            closing_message = (
+                "\n\n━━━━━━━━━━━\n\n"
+                "今回の鑑定が、少しでもこれからを考えるきっかけになれば嬉しいです\n\n"
+                "今後も、占いの結果だけでなく、今の状況をどう受け止め、"
+                "これからどう考えていくかというヒントもお届けしていきます\n\n"
+                "そのために、最後に3つだけ教えてください\n\n"
+                "今後お届けする内容の参考にさせていただきます\n\n"
+                "1分ほどで回答できます\n\n"
+                "今から簡単なアンケートをお送りします"
+            )
+
+            survey_message = (
+                "① 今、一番気になっていることはどれですか？\n\n"
+                "1. 仕事・働き方\n"
+                "2. お金・これからの生活\n"
+                "3. 家族・人間関係\n"
+                "4. 恋愛・パートナー\n"
+                "5. 将来・これからの生き方\n"
+                "6. その他\n\n"
+                "② 今の状態に一番近いものはどれですか？\n\n"
+                "1. 何をどうすればいいのか分からない\n"
+                "2. 選択肢はあるけれど、決められない\n"
+                "3. やりたいことはあるけれど、行動に移せない\n"
+                "4. 自分の気持ちや考えを一度整理したい\n"
+                "5. 特に大きな悩みはない\n\n"
+                "③ 今、実際に悩んでいることや迷っていることがあれば、自由に教えてください\n\n"
+                "占いについての質問だけでなく、\n"
+                "仕事・お金・家族・人間関係・将来など、\n"
+                "実生活でのお悩みでも大丈夫です\n\n"
+                "【返信例】\n"
+                "①1\n"
+                "②2\n"
+                "③今の仕事をこのまま続けるか、転職するか迷っています"
+            )
+
+            reply_text = ai_reply + closing_message
+            extra_reply_text = survey_message
+            user_states[user_id]["step"] = "waiting_survey"
             save_user_progress(
                 user_id,
-                "coconala_sent"
+                "waiting_survey"
             )
+
+    elif current_step == "waiting_survey":
+        # 3問分の回答を1通のまま保存
+        save_user_field(
+            user_id,
+            "survey_response",
+            user_message
+        )
+
+        # アンケート回答後はHIDEの手動対応へ切り替える
+        user_states[user_id]["step"] = "manual"
+        save_user_progress(
+            user_id,
+            "manual"
+        )
+
+        reply_text = (
+            "ご回答ありがとうございます😊\n\n"
+            "いただいた内容を確認させていただきます"
+        )
+
+    elif current_step == "manual":
+        # manual中はBotから自動返信しない
+        print(f"Manual mode: no bot reply user_id={user_id}")
+        return
 
     else:
         reply_text = (
@@ -741,12 +633,19 @@ def handle_message(event):
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
 
+        messages = [
+            TextMessage(text=reply_text)
+        ]
+
+        if extra_reply_text:
+            messages.append(
+                TextMessage(text=extra_reply_text)
+            )
+
         line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[
-                    TextMessage(text=reply_text)
-                ]
+                messages=messages
             )
         )
 
