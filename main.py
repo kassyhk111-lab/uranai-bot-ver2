@@ -1,4 +1,3 @@
-
 from flask import Flask, request, abort
 import os
 import requests
@@ -156,6 +155,82 @@ def save_user_field(user_id, field_name, value):
             f"Supabase field save error: "
             f"user_id={user_id}, field={field_name}, error={e}"
         )
+
+
+def load_user_state(user_id):
+    """
+    Renderのメモリにユーザー状態がない場合、
+    Supabaseのusersテーブルから会話状態と入力内容を復元する。
+
+    Supabaseから取得できない場合は、従来どおりcompletedとして扱う。
+    """
+
+    default_state = {
+        "step": "completed"
+    }
+
+    if supabase_client is None:
+        print(
+            f"Supabase unavailable while loading state: "
+            f"user_id={user_id}"
+        )
+        return default_state
+
+    try:
+        result = (
+            supabase_client
+            .table("users")
+            .select("status,birthdate,problem,future")
+            .eq("line_user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+
+        if not result.data:
+            print(
+                f"Supabase user not found while loading state: "
+                f"user_id={user_id}"
+            )
+            return default_state
+
+        row = result.data[0]
+        status = row.get("status")
+
+        status_to_step = {
+            "waiting_birthdate": "waiting_birth",
+            "waiting_problem": "waiting_problem",
+            "waiting_future": "waiting_future",
+            "ai_error": "completed",
+            "coconala_sent": "completed",
+        }
+
+        state = {
+            "step": status_to_step.get(status, "completed")
+        }
+
+        if row.get("birthdate"):
+            state["birth"] = row["birthdate"]
+
+        if row.get("problem"):
+            state["problem"] = row["problem"]
+
+        if row.get("future"):
+            state["future"] = row["future"]
+
+        print(
+            f"Supabase state loaded: "
+            f"user_id={user_id}, status={status}, "
+            f"step={state['step']}"
+        )
+
+        return state
+
+    except Exception as e:
+        print(
+            f"Supabase state load error: "
+            f"user_id={user_id}, error={e}"
+        )
+        return default_state
 
 
 def create_coconala_tracking_url(user_id):
@@ -539,9 +614,9 @@ def handle_message(event):
     print(f"Received message: {repr(user_message)}")
 
     if user_id not in user_states:
-        user_states[user_id] = {
-            "step": "completed"
-        }
+        # Render再起動・スピンダウン後は、
+        # Supabaseから会話状態と入力内容を復元する
+        user_states[user_id] = load_user_state(user_id)
 
     if user_message == "無料鑑定" or user_message == "無料鑑定希望":
         user_states[user_id] = {
